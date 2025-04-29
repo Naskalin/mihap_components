@@ -1,63 +1,39 @@
 @using System.Threading
 @using Microsoft.JSInterop
-@typeparam T
 @inject IJSRuntime Js
 @implements IAsyncDisposable
 @namespace MihapComponents.InfinityScroll
 
-@foreach (var item in _items)
-{
-    if (ItemTemplate != null)
-    {
-        @ItemTemplate(item)
-    }
-}
+@ChildContent
 @if (_loading)
 {   
     @LoadingTemplate
 }
-@if (_isEndOfData)
-{
-    @EndOfDataTemplate
-}
-
 <div @ref="_lastItemIndicator" style="height:1px"></div>
 
 @code {
-    private readonly List<T> _items = [];
     private ElementReference _lastItemIndicator;
-    private DotNetObjectReference<InfinityScroll<T>>? _currentComponentReference;
+    private DotNetObjectReference<InfinityScroll>? _currentComponentReference;
     private IJSObjectReference? _instance;
     private IJSObjectReference? _module;
     private bool _loading;
     private CancellationTokenSource? _loadItemsCts;
-    private bool _isEndOfData;
+
+    [Parameter] public RenderFragment ChildContent { get; set; } = null!;
+    
+    [Parameter]
+    public bool IsEndOfData { get; set; }
 
     [Parameter]
-    public InfinityScrollDelegate<T>? ItemsProvider { get; set; }
-
-    [Parameter]
-    public RenderFragment<T>? ItemTemplate { get; set; }
+    public InfinityScrollDelegate? ItemsProvider { get; set; }
 
     [Parameter]
     public RenderFragment? LoadingTemplate { get; set; }
     
-    [Parameter]
-    public int PerPage { get; set; }
-    
-    [Parameter]
-    public RenderFragment? EndOfDataTemplate { get; set; }
-
-    public Task ResetAsync()
-    {
-        _isEndOfData = false;
-        return LoadMoreItems();
-    }
-
     [JSInvokable]
     public async Task LoadMoreItems()
     {
-        if (_loading || _isEndOfData)
+        if (_loading || IsEndOfData)
             return;
 
         if (ItemsProvider == null)
@@ -68,16 +44,11 @@
         {
             _loadItemsCts ??= new CancellationTokenSource();
 
-            StateHasChanged(); // Allow the UI to display the loading indicator
+            StateHasChanged();
             try
             {
-                var newItems = await ItemsProvider(_loadItemsCts.Token);
-                _items.AddRange(newItems);
+                await ItemsProvider(_loadItemsCts.Token);
                 if (_instance != null) await _instance.InvokeVoidAsync("onNewItems");
-                if (newItems.Count < PerPage)
-                {
-                    _isEndOfData = true;
-                }
             }
             catch (OperationCanceledException oce) when (oce.CancellationToken == _loadItemsCts.Token)
             {
@@ -91,7 +62,7 @@
 
         StateHasChanged(); // Display the new items and hide the loading indicator
 
-        if (_isEndOfData)
+        if (IsEndOfData)
         {
             await DisposeAsync();
         }
@@ -125,7 +96,6 @@
             await _module.DisposeAsync();
         }
         
-    
         _currentComponentReference?.Dispose();
     }
 }
